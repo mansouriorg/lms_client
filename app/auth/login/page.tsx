@@ -2,16 +2,44 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Github } from 'lucide-react';
+// Make sure this path points to where you created the auth.service.ts file!
+import { authService } from '@/services/auth.service'; 
 
 export default function PremiumLoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 2000);
+    setError(''); // Clear any previous errors
+
+    try {
+      // 1. Send credentials to NestJS backend
+      const data = await authService.login({ email, password });
+      const userRole = data.user.role;
+
+      // 2. The "Smart Traffic Cop" Routing Logic
+      if (userRole === 'ADMIN') {
+        router.push('/admin-dashboard');
+      } else if (userRole === 'CENTER') {
+        router.push('/center-dashboard');
+      } else {
+        router.push('/dashboard'); // Default student dashboard
+      }
+
+    } catch (err: any) {
+      // Safely extract the error message from the NestJS response
+      setError(err.response?.data?.message || 'Une erreur est survenue lors de la connexion.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,6 +60,13 @@ export default function PremiumLoginPage() {
               Welcome back! Please enter your details to continue.
             </p>
           </div>
+
+          {/* Dynamic Error Message Display */}
+          {error && (
+            <div className="p-3 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl mb-4 text-center animate-in fade-in zoom-in duration-200">
+              {error}
+            </div>
+          )}
 
           {/* Social Logins */}
           <div className="grid grid-cols-2 gap-4">
@@ -71,6 +106,8 @@ export default function PremiumLoginPage() {
                 <input
                   id="email"
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   className="block w-full pl-11 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 sm:text-sm"
                   placeholder="m.mansouri@example.com"
@@ -94,6 +131,8 @@ export default function PremiumLoginPage() {
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                   className="block w-full pl-11 pr-11 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 sm:text-sm"
                   placeholder="••••••••"
@@ -111,7 +150,7 @@ export default function PremiumLoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full relative group flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 transition-all duration-200 overflow-hidden"
+              className="w-full relative group flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 transition-all duration-200 overflow-hidden disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-indigo-600 to-violet-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               <span className="relative flex items-center">
@@ -168,7 +207,7 @@ export default function PremiumLoginPage() {
               M
             </div>
             <div>
-              <p className="text-white font-medium">Mahmoud</p>
+              <p className="text-white font-medium">Mahmoud Mansouri</p>
               <p className="text-slate-400 text-sm">Software Engineer</p>
             </div>
           </div>
