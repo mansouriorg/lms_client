@@ -1,240 +1,139 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
 import { 
-  LayoutDashboard, 
-  Calendar, 
   Users, 
+  BookOpen, 
   CreditCard, 
-  Settings, 
-  Bell, 
-  Search, 
-  Plus, 
-  MoreVertical,
-  TrendingUp,
-  MapPin,
-  Car
+  Star, 
+  TrendingUp, 
+  MoreHorizontal,
+  GraduationCap,
+  PlayCircle
 } from 'lucide-react';
 
-// Dummy data representing upcoming driving training sessions
-const upcomingSessions = [
-  { id: 'TR-101', date: 'Feb 24, 2026', type: 'Stage de Sensibilisation', enrolled: 12, capacity: 20, status: 'Active', price: '€250' },
-  { id: 'TR-102', date: 'Feb 28, 2026', type: 'Récupération de Points', enrolled: 20, capacity: 20, status: 'Full', price: '€250' },
-  { id: 'TR-103', date: 'Mar 05, 2026', type: 'Stage de Sensibilisation', enrolled: 5, capacity: 20, status: 'Upcoming', price: '€250' },
-  { id: 'TR-104', date: 'Mar 12, 2026', type: 'Récupération de Points', enrolled: 0, capacity: 15, status: 'Draft', price: '€280' },
-];
+export default function AcademyDashboard() {
+  // Mock data for the e-learning dashboard stats
+  const stats = [
+    { name: 'Total Students', value: '1,248', change: '+12%', isPositive: true, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { name: 'Active Enrollments', value: '342', change: '+18%', isPositive: true, icon: BookOpen, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+    { name: 'Monthly Revenue', value: '$12,450', change: '+5%', isPositive: true, icon: CreditCard, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+    { name: 'Average Rating', value: '4.8/5', change: '+0.2', isPositive: true, icon: Star, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  ];
 
-export default function CenterDashboard() {
-  const [activeTab, setActiveTab] = useState('overview');
+  // Mock data for recent course enrollments
+  const recentEnrollments = [
+    { id: 1, student: 'Sarah Connor', course: 'Full-Stack Next.js Architecture', date: 'Today, 14:00', progress: 0, amount: '$99' },
+    { id: 2, student: 'John Doe', course: 'Backend Engineering with NestJS', date: 'Today, 11:30', progress: 12, amount: '$89' },
+    { id: 3, student: 'Ali Ben Salah', course: 'React Native Crash Course', date: 'Yesterday', progress: 45, amount: '$49' },
+    { id: 4, student: 'Fatima Zahra', course: 'Full-Stack Next.js Architecture', date: 'Yesterday', progress: 100, amount: '$99' },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-300 font-sans flex overflow-hidden selection:bg-indigo-500 selection:text-white">
+    <div className="space-y-6">
       
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-slate-900/50 border-r border-slate-800 backdrop-blur-xl hidden md:flex flex-col justify-between">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          {/* Brand Logo Area */}
-          <div className="h-20 flex items-center px-8 border-b border-slate-800/60">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center mr-3 shadow-lg shadow-indigo-500/20">
-              <Car className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-white font-bold text-xl tracking-tight">CenterPro</span>
-          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Instructor Overview</h1>
+          <p className="text-sm text-slate-400 mt-1">Welcome back. Here is how your courses are performing today.</p>
+        </div>
+        <button className="inline-flex items-center justify-center py-2.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 transition-all duration-200 shadow-lg shadow-indigo-500/20">
+          + Create New Course
+        </button>
+      </div>
 
-          {/* Navigation Links */}
-          <nav className="p-4 space-y-1.5 mt-4">
-            <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'overview' ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-              <LayoutDashboard className="w-5 h-5 mr-3" /> Overview
-            </button>
-            <button onClick={() => setActiveTab('sessions')} className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'sessions' ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-              <Calendar className="w-5 h-5 mr-3" /> Training Sessions
-            </button>
-            <button onClick={() => setActiveTab('students')} className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'students' ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-              <Users className="w-5 h-5 mr-3" /> Registered Students
-            </button>
-            <button onClick={() => setActiveTab('payments')} className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'payments' ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-              <CreditCard className="w-5 h-5 mr-3" /> Payments & Stripe
-            </button>
-          </nav>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.name} className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm relative overflow-hidden group hover:border-slate-700 transition-colors">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.bg}`}>
+                  <Icon className={`w-5 h-5 ${stat.color}`} />
+                </div>
+                <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${stat.isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                  {stat.change}
+                </span>
+              </div>
+              <h3 className="text-slate-400 text-sm font-medium">{stat.name}</h3>
+              <p className="text-2xl font-bold text-white mt-1 tracking-tight">{stat.value}</p>
+              
+              {/* Subtle hover gradient */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Chart Area (Placeholder for Sales Chart) */}
+        <div className="lg:col-span-2 p-6 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-white">Revenue & Enrollments</h2>
+            <select className="bg-slate-800 border border-slate-700 text-sm text-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 outline-none">
+              <option>Last 7 days</option>
+              <option>This Month</option>
+              <option>This Year</option>
+            </select>
+          </div>
+          <div className="flex-1 min-h-[250px] w-full rounded-xl border border-slate-700/50 border-dashed flex flex-col items-center justify-center text-slate-500 bg-slate-800/20">
+            <TrendingUp className="w-8 h-8 mb-3 opacity-50 text-indigo-400" />
+            <p className="text-sm font-medium text-slate-400">Chart integration goes here</p>
+            <p className="text-xs mt-1">Recommend using Recharts or Chart.js</p>
+          </div>
         </div>
 
-        {/* User Profile Mini */}
-        <div className="p-4 border-t border-slate-800/60">
-          <div className="flex items-center px-4 py-3 rounded-xl bg-slate-800/30 border border-slate-700/50 cursor-pointer hover:bg-slate-800/50 transition-colors">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-inner">
-              EC
-            </div>
-            <div className="ml-3 overflow-hidden">
-              <p className="text-sm font-medium text-white truncate">École Centrale</p>
-              <p className="text-xs text-slate-500 truncate">Center Admin</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* Ambient Background Glow */}
-        <div className="absolute top-[-10%] left-[20%] w-[40%] h-[30%] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
-
-        {/* Top Header */}
-        <header className="h-20 flex items-center justify-between px-8 border-b border-slate-800/60 bg-slate-900/20 backdrop-blur-md z-10">
-          <div className="flex items-center bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-2 w-96 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all">
-            <Search className="w-4 h-4 text-slate-500" />
-            <input 
-              type="text" 
-              placeholder="Search sessions, students, or IDs..." 
-              className="bg-transparent border-none outline-none text-sm text-white ml-3 w-full placeholder-slate-500"
-            />
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <button className="relative p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full border-2 border-[#0f172a]"></span>
-            </button>
-            <button className="flex items-center py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20">
-              <Plus className="w-4 h-4 mr-2" />
-              New Session
+        {/* Recent Enrollments List */}
+        <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-white">Recent Sales</h2>
+            <button className="text-slate-400 hover:text-white transition-colors">
+              <MoreHorizontal className="w-5 h-5" />
             </button>
           </div>
-        </header>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-8 z-10">
-          <div className="max-w-7xl mx-auto space-y-8">
-            
-            {/* Page Title */}
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Overview</h1>
-              <p className="text-sm text-slate-400 mt-1">Monitor your training center's performance and upcoming classes.</p>
-            </div>
-
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Metric Card 1 */}
-              <div className="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/50 backdrop-blur-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-colors"></div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-slate-400 font-medium text-sm">Active Sessions</h3>
-                  <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-                    <Calendar className="w-5 h-5" />
+          
+          <div className="flex-1 space-y-4">
+            {recentEnrollments.map((enrollment) => (
+              <div key={enrollment.id} className="flex items-start justify-between p-3 rounded-xl hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-700/50 group">
+                <div className="flex items-start gap-3 w-full">
+                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-medium shrink-0 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors">
+                    {enrollment.student.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="text-sm font-medium text-white truncate">{enrollment.student}</p>
+                    <p className="text-xs text-slate-400 mt-0.5 truncate flex items-center gap-1">
+                      <PlayCircle className="w-3 h-3" />
+                      {enrollment.course}
+                    </p>
+                    
+                    {/* Mini Progress Bar */}
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full ${enrollment.progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                          style={{ width: `${enrollment.progress}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-medium text-slate-500">{enrollment.progress}%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-emerald-400">{enrollment.amount}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">{enrollment.date}</p>
                   </div>
                 </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold text-white">12</span>
-                  <span className="flex items-center text-xs font-medium text-emerald-400 mb-1.5">
-                    <TrendingUp className="w-3 h-3 mr-1" /> +2 this month
-                  </span>
-                </div>
               </div>
-
-              {/* Metric Card 2 */}
-              <div className="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/50 backdrop-blur-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl group-hover:bg-violet-500/10 transition-colors"></div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-slate-400 font-medium text-sm">Total Bookings</h3>
-                  <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400">
-                    <Users className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold text-white">148</span>
-                  <span className="flex items-center text-xs font-medium text-emerald-400 mb-1.5">
-                    <TrendingUp className="w-3 h-3 mr-1" /> +15% vs last month
-                  </span>
-                </div>
-              </div>
-
-              {/* Metric Card 3 */}
-              <div className="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/50 backdrop-blur-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors"></div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-slate-400 font-medium text-sm">Estimated Revenue</h3>
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <CreditCard className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold text-white">€8,450</span>
-                  <span className="text-xs text-slate-500 mb-1.5">via Stripe</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Main Table Area */}
-            <div className="rounded-2xl bg-slate-800/40 border border-slate-700/50 backdrop-blur-sm overflow-hidden">
-              <div className="p-6 border-b border-slate-700/50 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-white">Upcoming Training Sessions</h2>
-                <button className="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
-                  View all
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-700/50 text-xs uppercase tracking-wider text-slate-500 bg-slate-900/20">
-                      <th className="px-6 py-4 font-medium">Session ID & Type</th>
-                      <th className="px-6 py-4 font-medium">Date</th>
-                      <th className="px-6 py-4 font-medium">Students</th>
-                      <th className="px-6 py-4 font-medium">Price</th>
-                      <th className="px-6 py-4 font-medium">Status</th>
-                      <th className="px-6 py-4 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700/50">
-                    {upcomingSessions.map((session) => (
-                      <tr key={session.id} className="hover:bg-slate-800/30 transition-colors group">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center mr-3 group-hover:border-indigo-500/30 transition-colors">
-                              <MapPin className="w-4 h-4 text-indigo-400" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-white">{session.type}</p>
-                              <p className="text-xs text-slate-500">{session.id}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-slate-300">{session.date}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-full bg-slate-800 rounded-full h-1.5 max-w-[60px]">
-                              <div 
-                                className={`h-1.5 rounded-full ${session.enrolled === session.capacity ? 'bg-emerald-500' : 'bg-indigo-500'}`} 
-                                style={{ width: `${(session.enrolled / session.capacity) * 100}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-xs text-slate-400">{session.enrolled}/{session.capacity}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-slate-300 font-medium">{session.price}</td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border
-                            ${session.status === 'Active' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 
-                              session.status === 'Full' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                              session.status === 'Upcoming' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                              'bg-slate-800 text-slate-400 border-slate-700'}
-                          `}>
-                            {session.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
+            ))}
           </div>
+
+          <button className="w-full mt-4 py-2.5 text-sm font-medium text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-xl transition-colors border border-transparent hover:border-indigo-500/20">
+            View All Transactions
+          </button>
         </div>
-      </main>
+      </div>
+
     </div>
   );
 }
