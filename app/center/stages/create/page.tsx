@@ -1,245 +1,113 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowLeft, 
-  Save, 
-  Layout, 
-  Image as ImageIcon, 
-  DollarSign,
-  Settings,
-  Plus,
-  GripVertical,
-  Trash2,
-  Video
-} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { AlertCircle, ArrowLeft, Save } from 'lucide-react';
+import CourseDetailsForm from '@/components/center/CourseDetailsForm';
+import { apiErrorMessage } from '@/lib/api-error';
+import { type CourseFormErrors, emptyCourseForm, readCourseForm } from '@/lib/course-admin';
+import { useSession } from '@/lib/use-session';
+import { type Academy, courseAdminService } from '@/services/course-admin.service';
 
 export default function CreateCoursePage() {
-  // State for the interactive curriculum builder
-  const [modules, setModules] = useState([
-    { id: 1, title: 'Introduction & Setup', lessons: [{ id: 101, title: 'Environment Setup' }] }
-  ]);
+  const router = useRouter();
+  const { user } = useSession();
+  // A platform admin chooses the academy; an academy admin creates for theirs.
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
-  const addModule = () => {
-    const newId = modules.length ? Math.max(...modules.map(m => m.id)) + 1 : 1;
-    setModules([...modules, { id: newId, title: '', lessons: [] }]);
-  };
+  const [values, setValues] = useState(emptyCourseForm);
+  const [errors, setErrors] = useState<CourseFormErrors>({});
+  const [academies, setAcademies] = useState<Academy[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
-  const addLesson = (moduleId: number) => {
-    setModules(modules.map(mod => {
-      if (mod.id === moduleId) {
-        const newLessonId = mod.lessons.length ? Math.max(...mod.lessons.map(l => l.id)) + 1 : (moduleId * 100) + 1;
-        return { ...mod, lessons: [...mod.lessons, { id: newLessonId, title: '' }] };
-      }
-      return mod;
-    }));
+  useEffect(() => {
+    if (isSuperAdmin === false) return;
+    let active = true;
+    courseAdminService.academies().then(
+      (list) => {
+        if (active) setAcademies(list);
+      },
+      (error: unknown) => {
+        if (active) setSaveError(apiErrorMessage(error, 'Could not load the academies.'));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [isSuperAdmin]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { errors: found, payload } = readCourseForm(values, {
+      forCreate: true,
+      needsAcademy: isSuperAdmin,
+    });
+    setErrors(found);
+    setSaveError('');
+    if (payload === null) return;
+    setSaving(true);
+    try {
+      const { stage } = await courseAdminService.create(payload);
+      // The editor of the new course (still a draft); the button stays busy
+      router.push(`/center/stages/${encodeURIComponent(stage.id)}`);
+    } catch (error) {
+      setSaveError(apiErrorMessage(error, 'Could not create the course. Please try again.'));
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-24">
-      
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-50 bg-[#0f172a]/80 backdrop-blur-xl py-4 border-b border-slate-800/50">
-        <div>
-          <Link href="/center/dashboard" className="inline-flex items-center text-sm font-medium text-slate-400 hover:text-indigo-400 transition-colors mb-2">
-            <ArrowLeft className="w-4 h-4 mr-1.5" />
-            Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Create New Course</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-300 bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 transition-colors backdrop-blur-sm">
-            Save Draft
-          </button>
-          <button className="inline-flex items-center justify-center py-2.5 px-6 border border-transparent rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 transition-all duration-200 shadow-lg shadow-indigo-500/20">
-            <Save className="w-4 h-4 mr-2" />
-            Publish Course
-          </button>
-        </div>
+    <form onSubmit={submit} className="space-y-6 max-w-3xl" noValidate>
+      <div>
+        <Link
+          href="/center/stages"
+          className="inline-flex items-center text-sm font-medium text-slate-400 hover:text-indigo-400 transition-colors mb-2"
+        >
+          <ArrowLeft aria-hidden="true" className="w-4 h-4 mr-1.5" />
+          Courses
+        </Link>
+        <h1 className="text-2xl font-bold text-white tracking-tight">New course</h1>
+        <p className="text-sm text-slate-400 mt-1">
+          The course is created as a draft: students do not see it. You add its program and
+          publish it from the next page.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Main Column - Details & Curriculum */}
-        <div className="lg:col-span-2 space-y-8">
-          
-          {/* Basic Information */}
-          <div className="p-6 rounded-3xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm space-y-6">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-slate-800 pb-4">
-              <Layout className="w-5 h-5 text-indigo-400" />
-              Basic Information
-            </h2>
-
-            <div className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-300">Course Title</label>
-                <input
-                  type="text"
-                  className="block w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 outline-none sm:text-sm"
-                  placeholder="e.g., The Complete Next.js Bootcamp"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-300">Course Subtitle</label>
-                <input
-                  type="text"
-                  className="block w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 outline-none sm:text-sm"
-                  placeholder="A brief summary of what students will achieve..."
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-300">Detailed Description</label>
-                <textarea
-                  rows={6}
-                  className="block w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 outline-none sm:text-sm resize-none"
-                  placeholder="Explain the curriculum, requirements, and target audience..."
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Curriculum Builder */}
-          <div className="p-6 rounded-3xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Video className="w-5 h-5 text-emerald-400" />
-                Curriculum Builder
-              </h2>
-              <button 
-                onClick={addModule}
-                className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-              >
-                + Add Module
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {modules.map((module, modIndex) => (
-                <div key={module.id} className="border border-slate-700 rounded-2xl bg-slate-800/30 overflow-hidden">
-                  
-                  {/* Module Header */}
-                  <div className="p-4 bg-slate-800/50 border-b border-slate-700 flex items-center gap-3">
-                    <GripVertical className="w-5 h-5 text-slate-500 cursor-move" />
-                    <span className="text-sm font-bold text-slate-400">Section {modIndex + 1}:</span>
-                    <input 
-                      type="text" 
-                      placeholder="Enter module title..."
-                      defaultValue={module.title}
-                      className="flex-1 bg-transparent border-none text-white font-medium focus:outline-none focus:ring-0 px-2"
-                    />
-                    <button className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Lessons List */}
-                  <div className="p-4 space-y-3">
-                    {module.lessons.map((lesson, lesIndex) => (
-                      <div key={lesson.id} className="flex items-center gap-3 pl-8 group">
-                        <GripVertical className="w-4 h-4 text-slate-600 cursor-move opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="w-6 h-6 rounded-full bg-slate-700/50 flex items-center justify-center text-xs font-medium text-slate-400 shrink-0 border border-slate-600">
-                          {lesIndex + 1}
-                        </div>
-                        <div className="flex-1 flex items-center bg-slate-900/50 border border-slate-700 rounded-xl px-3 py-2 focus-within:border-indigo-500/50 transition-colors">
-                          <Video className="w-4 h-4 text-slate-500 mr-2 shrink-0" />
-                          <input 
-                            type="text" 
-                            placeholder="Lesson title..."
-                            defaultValue={lesson.title}
-                            className="w-full bg-transparent border-none text-sm text-slate-300 focus:outline-none focus:ring-0"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    
-                    <div className="pl-14 pt-2">
-                      <button 
-                        onClick={() => addLesson(module.id)}
-                        className="inline-flex items-center text-xs font-medium text-slate-400 hover:text-white transition-colors py-1.5 px-3 rounded-lg hover:bg-slate-700/50 border border-transparent hover:border-slate-600"
-                      >
-                        <Plus className="w-3.5 h-3.5 mr-1.5" />
-                        Add Lesson
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar Column - Settings & Media */}
-        <div className="space-y-8">
-          
-          {/* Course Media */}
-          <div className="p-6 rounded-3xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm space-y-6">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-slate-800 pb-4">
-              <ImageIcon className="w-5 h-5 text-violet-400" />
-              Course Thumbnail
-            </h2>
-
-            <div className="relative w-full aspect-video rounded-xl border-2 border-dashed border-slate-700 hover:border-indigo-500/50 bg-slate-800/30 flex flex-col items-center justify-center transition-all duration-200 cursor-pointer group overflow-hidden">
-              <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors text-slate-500 border border-slate-700">
-                <ImageIcon className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-medium text-slate-300">Upload Image</p>
-              <p className="text-xs text-slate-500 mt-1">1920x1080px (macOS friendly formats: JPG, PNG)</p>
-            </div>
-          </div>
-
-          {/* Pricing & Settings */}
-          <div className="p-6 rounded-3xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm space-y-6">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-slate-800 pb-4">
-              <Settings className="w-5 h-5 text-amber-400" />
-              Settings
-            </h2>
-
-            {/* Price */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-300">Course Price ($)</label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <DollarSign className="h-4 w-4 text-slate-500 group-focus-within:text-emerald-400 transition-colors" />
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="block w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-200 outline-none sm:text-sm"
-                  placeholder="89.99"
-                />
-              </div>
-            </div>
-
-            {/* Category */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-300">Category</label>
-              <select className="block w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 outline-none sm:text-sm appearance-none">
-                <option value="web-dev">Web Development</option>
-                <option value="mobile-dev">Mobile Development</option>
-                <option value="backend">Backend Engineering</option>
-                <option value="devops">DevOps & Deployment</option>
-              </select>
-            </div>
-
-            {/* Level */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-300">Difficulty Level</label>
-              <select className="block w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 outline-none sm:text-sm appearance-none">
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-                <option value="all-levels">All Levels</option>
-              </select>
-            </div>
-
-          </div>
-        </div>
-
+      <div className="p-6 rounded-3xl bg-slate-900/50 border border-slate-800">
+        <CourseDetailsForm
+          values={values}
+          onChange={setValues}
+          errors={errors}
+          academies={isSuperAdmin ? (academies ?? []) : null}
+          showStatus={false}
+        />
       </div>
-    </div>
+
+      {saveError && (
+        <p role="alert" className="flex items-start gap-2 text-sm text-red-400">
+          <AlertCircle aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
+          {saveError}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="submit"
+          disabled={saving}
+          className="inline-flex items-center gap-2 py-2.5 px-5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <Save aria-hidden="true" className="w-4 h-4" />
+          {saving ? 'Creating...' : 'Create the course'}
+        </button>
+        <Link
+          href="/center/stages"
+          className="py-2.5 px-5 rounded-xl text-sm font-medium text-slate-300 border border-slate-700 hover:bg-slate-800 transition-colors"
+        >
+          Cancel
+        </Link>
+      </div>
+    </form>
   );
 }

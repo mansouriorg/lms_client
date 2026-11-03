@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:routes": "node scripts/check-routes.mjs",
+    "check:brand": "node scripts/check-brand.mjs",
+    "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON lib/format.test.mjs lib/api-error.test.mjs lib/auth.test.mjs lib/orders.test.mjs lib/purchases.test.mjs lib/catalog.test.mjs lib/learning.test.mjs lib/course-admin.test.mjs lib/program.test.mjs lib/qa.test.mjs lib/academies.test.mjs lib/academy-admins.test.mjs lib/profile.test.mjs lib/sessions.test.mjs lib/sessions-academy.test.mjs lib/digital-products.test.mjs lib/store.test.mjs lib/coupons.test.mjs lib/academy-dashboard.test.mjs lib/students.test.mjs lib/quizzes.test.mjs lib/practice-quiz.test.mjs lib/quiz-results.test.mjs lib/lesson-progress.test.mjs lib/password-reset.test.mjs lib/reset-requests.test.mjs lib/legal.test.mjs lib/terms-acceptance.test.mjs lib/assignments.test.mjs lib/project-reviews.test.mjs lib/work-counts.test.mjs"
   },
   "dependencies": {
     "axios": "^1.13.5",

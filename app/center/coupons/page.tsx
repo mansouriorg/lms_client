@@ -1,227 +1,461 @@
 'use client';
 
-import { useState } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  MoreVertical, 
-  Tag, 
-  Copy, 
-  Percent, 
-  Calendar,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle2, Copy, Pause, Play, Plus, RotateCcw, Tag, Trash2 } from 'lucide-react';
+import FieldError from '@/components/account/FieldError';
+import { apiErrorMessage } from '@/lib/api-error';
+import {
+  type AdminCoupon,
+  type CouponErrors,
+  type CouponKind,
+  type CouponState,
+  type CouponValues,
+  canDeleteCoupon,
+  couponState,
+  couponStateLabel,
+  discountLabel,
+  emptyCouponForm,
+  endLabel,
+  readCouponForm,
+  usesLabel,
+} from '@/lib/coupons';
+import { formatPrice } from '@/lib/format';
+import { todayIn } from '@/lib/sessions';
+import { couponsService } from '@/services/coupons.service';
 
+type Notice = { tone: 'success' | 'error'; text: string };
+
+const FIELD =
+  'block w-full px-3 py-2.5 bg-slate-800/50 border rounded-xl text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none';
+const PLAIN_BUTTON =
+  'inline-flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm text-slate-300 border border-slate-700 hover:bg-slate-800 transition-colors disabled:opacity-50';
+
+const STATE_STYLE: Record<CouponState, string> = {
+  active: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  paused: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
+  expired: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
+  'used-up': 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+};
+
+// Coupons: the discount codes of the academy. Students type a code at
+// checkout; an academy coupon only lowers the price of the academy's own
+// courses and products. Create, pause or resume a code; delete one that no
+// order used.
 export default function CenterCouponsPage() {
-  // Mock data for the instructor's discount codes
-  const [coupons] = useState([
-    { id: 'CPN-01', code: 'LAUNCH2026', discount: '20%', course: 'All Courses', uses: 45, limit: 100, expires: 'Dec 31, 2026', status: 'active' },
-    { id: 'CPN-02', code: 'NEXTJS-PRO', discount: '50%', course: 'Mastering Next.js & NestJS', uses: 10, limit: 10, expires: 'Nov 15, 2026', status: 'depleted' },
-    { id: 'CPN-03', code: 'EARLYBIRD', discount: '15%', course: 'Backend Engineering', uses: 12, limit: 50, expires: 'Oct 01, 2026', status: 'expired' },
-    { id: 'CPN-04', code: 'STUDENT50', discount: '50%', course: 'All Courses', uses: 128, limit: '∞', expires: 'Never', status: 'active' },
-    { id: 'CPN-05', code: 'FLASHBACK', discount: '$20 OFF', course: 'React Native Crash Course', uses: 5, limit: 20, expires: 'Oct 30, 2026', status: 'active' },
-  ]);
+  const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
+  // When the list was loaded (states like "Ended" depend on it), and that day
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [formOpen, setFormOpen] = useState(false);
+  const [values, setValues] = useState<CouponValues>(emptyCouponForm());
+  const [startActive, setStartActive] = useState(true);
+  const [errors, setErrors] = useState<CouponErrors>({});
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><CheckCircle2 className="w-3.5 h-3.5" /> Active</span>;
-      case 'depleted':
-        return <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"><AlertCircle className="w-3.5 h-3.5" /> Limit Reached</span>;
-      case 'expired':
-        return <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20"><XCircle className="w-3.5 h-3.5" /> Expired</span>;
-      default:
-        return null;
+  useEffect(() => {
+    let active = true;
+    couponsService.list().then(
+      (list) => {
+        if (active) {
+          setCoupons(list);
+          setLoadedAt(new Date());
+          setLoadError('');
+        }
+      },
+      (error: unknown) => {
+        if (active) setLoadError(apiErrorMessage(error, 'Could not load your coupons. Please try again.'));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const reload = () => setReloadKey((key) => key + 1);
+  const today = loadedAt ? todayIn(loadedAt) : '';
+
+  const change = (field: keyof CouponValues, value: string) => {
+    setValues((current) => ({ ...current, [field]: value }));
+    const key = field === 'kind' ? 'value' : field;
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
+  const openForm = () => {
+    setValues(emptyCouponForm());
+    setStartActive(true);
+    setErrors({});
+    setNotice(null);
+    setConfirmingId(null);
+    setFormOpen(true);
+  };
+
+  const create = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const { errors: found, payload } = readCouponForm(values, today);
+    setErrors(found);
+    if (payload === null) return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      await couponsService.create(payload, startActive);
+      setFormOpen(false);
+      setNotice({
+        tone: 'success',
+        text: startActive
+          ? `${payload.code} is ready: students can use it at checkout.`
+          : `${payload.code} is created and paused. Resume it when you want students to use it.`,
+      });
+      reload();
+    } catch (error) {
+      setNotice({ tone: 'error', text: apiErrorMessage(error, 'Could not create the coupon. Please try again.') });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const copyToClipboard = (code: string) => {
-    navigator.clipboard.writeText(code);
-    // In a real app, you'd show a toast notification here
-    alert(`Copied ${code} to clipboard!`);
+  const toggle = async (coupon: AdminCoupon) => {
+    setBusyId(coupon.id);
+    setNotice(null);
+    try {
+      await couponsService.toggle(coupon.id);
+      setNotice({
+        tone: 'success',
+        text: coupon.isActive
+          ? `${coupon.code} is paused: students cannot use it until you resume it.`
+          : `${coupon.code} works again.`,
+      });
+    } catch (error) {
+      setNotice({ tone: 'error', text: apiErrorMessage(error, 'Could not change the coupon. Please try again.') });
+    } finally {
+      setBusyId(null);
+      reload();
+    }
   };
 
+  const remove = async (coupon: AdminCoupon) => {
+    setBusyId(coupon.id);
+    setNotice(null);
+    try {
+      await couponsService.remove(coupon.id);
+      setNotice({ tone: 'success', text: `${coupon.code} is deleted.` });
+    } catch (error) {
+      setNotice({ tone: 'error', text: apiErrorMessage(error, 'Could not delete the coupon. Please try again.') });
+    } finally {
+      setConfirmingId(null);
+      setBusyId(null);
+      reload();
+    }
+  };
+
+  // Copies the code to share it (some browsers only allow it on https)
+  const copy = (coupon: AdminCoupon) => {
+    const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
+    if (clipboard === undefined) return;
+    clipboard.writeText(coupon.code).then(
+      () => setCopiedId(coupon.id),
+      () => setCopiedId(null),
+    );
+  };
+
+  const fieldClass = (field: keyof CouponErrors) =>
+    `${FIELD} ${errors[field] ? 'border-red-500/60' : 'border-slate-700'}`;
+  const describedBy = (field: keyof CouponErrors, id: string) => (errors[field] ? `${id}-error` : undefined);
+  const kind: CouponKind = values.kind;
+
   return (
-    <div className="space-y-6">
-      
-      {/* Page Header & Actions */}
+    <div className="space-y-6 max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Promotions & Coupons</h1>
-          <p className="text-sm text-slate-400 mt-1">Create discount codes to boost your course enrollments.</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Coupons</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Discount codes for your courses and digital products. Students type the code at checkout; a
+            coupon of your academy only lowers the price of your academy&apos;s items.
+          </p>
         </div>
-        <button className="inline-flex items-center justify-center py-2.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 transition-all duration-200 shadow-lg shadow-indigo-500/20">
-          <Plus className="w-4 h-4 mr-2" />
-          Create Coupon
-        </button>
+        {coupons !== null && formOpen === false && (
+          <button
+            type="button"
+            onClick={openForm}
+            className="inline-flex shrink-0 items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors whitespace-nowrap"
+          >
+            <Plus aria-hidden="true" className="w-4 h-4" />
+            Create a coupon
+          </button>
+        )}
       </div>
 
-      {/* Quick Stats Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/20">
-            <Tag className="w-6 h-6 text-indigo-400" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-400">Active Campaigns</p>
-            <p className="text-xl font-bold text-white tracking-tight">3</p>
-          </div>
-        </div>
-        <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/20">
-            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-400">Total Redemptions</p>
-            <p className="text-xl font-bold text-white tracking-tight">200</p>
-          </div>
-        </div>
-        <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0 border border-violet-500/20">
-            <Percent className="w-6 h-6 text-violet-400" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-400">Avg. Discount</p>
-            <p className="text-xl font-bold text-white tracking-tight">27%</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters & Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-500" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 sm:text-sm outline-none backdrop-blur-sm"
-            placeholder="Search by promo code or course name..."
-          />
-        </div>
-        <div className="flex gap-2">
-          <select className="bg-slate-900/50 border border-slate-800 text-sm text-slate-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none backdrop-blur-sm appearance-none min-w-[140px]">
-            <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-            <option value="depleted">Depleted</option>
-          </select>
-          <button className="inline-flex items-center justify-center py-2.5 px-4 border border-slate-700 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl text-sm font-medium text-slate-300 transition-colors backdrop-blur-sm shrink-0">
-            <Filter className="w-4 h-4 mr-2 text-slate-400" />
-            Filters
+      {loadError && (
+        <div
+          role="alert"
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl"
+        >
+          <span className="flex items-start gap-2">
+            <AlertCircle aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
+            {loadError}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError('');
+              reload();
+            }}
+            className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-red-400/30 text-red-300 font-medium hover:bg-red-400/10 transition-colors"
+          >
+            <RotateCcw aria-hidden="true" className="w-4 h-4" />
+            Try again
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Table Container */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl backdrop-blur-sm overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-900/50">
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Promo Code</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Discount</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Applicable Course</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Usage</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Expires</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {coupons.map((coupon) => (
-                <tr key={coupon.id} className="hover:bg-slate-800/30 transition-colors group">
-                  
-                  {/* Code */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-indigo-400 tracking-wide bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20">
-                        {coupon.code}
-                      </span>
-                      <button 
-                        onClick={() => copyToClipboard(coupon.code)}
-                        className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-700"
-                        title="Copy Code"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
+      {coupons === null && loadError === '' && (
+        <p role="status" className="text-sm text-slate-400 py-8 text-center">
+          Loading your coupons...
+        </p>
+      )}
 
-                  {/* Discount Amount */}
-                  <td className="py-4 px-6">
-                    <span className="text-sm font-bold text-emerald-400">{coupon.discount}</span>
-                  </td>
+      {notice && (
+        <p
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          className={`flex items-start gap-2 text-sm ${notice.tone === 'error' ? 'text-red-400' : 'text-emerald-400'}`}
+        >
+          {notice.tone === 'error' ? (
+            <AlertCircle aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
+          ) : (
+            <CheckCircle2 aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
+          )}
+          {notice.text}
+        </p>
+      )}
 
-                  {/* Course Details */}
-                  <td className="py-4 px-6">
-                    <p className="text-sm text-slate-300 line-clamp-1">{coupon.course}</p>
-                  </td>
-
-                  {/* Usage Stats */}
-                  <td className="py-4 px-6">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                        <span>{coupon.uses} used</span>
-                        <span>{coupon.limit} limit</span>
-                      </div>
-                      {typeof coupon.limit === 'number' && (
-                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 ${coupon.uses >= coupon.limit ? 'bg-amber-500' : 'bg-indigo-500'}`}
-                            style={{ width: `${(coupon.uses / coupon.limit) * 100}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Expiry Date */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2 text-sm text-slate-300">
-                      <Calendar className="w-4 h-4 text-slate-500" />
-                      {coupon.expires}
-                    </div>
-                  </td>
-
-                  {/* Status */}
-                  <td className="py-4 px-6">
-                    {getStatusBadge(coupon.status)}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="py-4 px-6 text-right">
-                    <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors outline-none focus:ring-2 focus:ring-slate-500/50">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-900/30">
-          <p className="text-sm text-slate-400">
-            Showing <span className="font-medium text-white">1</span> to <span className="font-medium text-white">5</span> of <span className="font-medium text-white">12</span> coupons
-          </p>
-          <div className="flex items-center gap-2">
-            <button className="p-2 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <ChevronLeft className="w-4 h-4" />
+      {/* Create a coupon */}
+      {formOpen && (
+        <form
+          onSubmit={create}
+          noValidate
+          aria-labelledby="coupon-form-title"
+          className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-5"
+        >
+          <h2 id="coupon-form-title" className="text-lg font-semibold text-white">
+            Create a coupon
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="space-y-2 sm:col-span-2">
+              <label htmlFor="coupon-code" className="text-sm font-medium text-slate-300">
+                Code
+              </label>
+              <input
+                id="coupon-code"
+                value={values.code}
+                onChange={(e) => change('code', e.target.value)}
+                maxLength={30}
+                autoComplete="off"
+                placeholder="For example WELCOME10"
+                aria-invalid={errors.code !== undefined}
+                aria-describedby={describedBy('code', 'coupon-code')}
+                className={`${fieldClass('code')} font-mono uppercase placeholder:normal-case placeholder:font-sans`}
+              />
+              <FieldError id="coupon-code-error" text={errors.code} />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="coupon-kind" className="text-sm font-medium text-slate-300">
+                Kind of discount
+              </label>
+              <select
+                id="coupon-kind"
+                value={kind}
+                onChange={(e) => change('kind', e.target.value)}
+                className={`${FIELD} border-slate-700`}
+              >
+                <option value="percent">A percentage (%)</option>
+                <option value="amount">A fixed amount (TND)</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="coupon-value" className="text-sm font-medium text-slate-300">
+                {kind === 'percent' ? 'Percentage off' : 'Amount off (TND)'}
+              </label>
+              <input
+                id="coupon-value"
+                inputMode="decimal"
+                value={values.value}
+                onChange={(e) => change('value', e.target.value)}
+                placeholder={kind === 'percent' ? '20' : '15'}
+                aria-invalid={errors.value !== undefined}
+                aria-describedby={describedBy('value', 'coupon-value')}
+                className={fieldClass('value')}
+              />
+              <FieldError id="coupon-value-error" text={errors.value} />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="coupon-uses" className="text-sm font-medium text-slate-300">
+                Limit of uses (optional)
+              </label>
+              <input
+                id="coupon-uses"
+                inputMode="numeric"
+                value={values.maxUses}
+                onChange={(e) => change('maxUses', e.target.value)}
+                placeholder="No limit"
+                aria-invalid={errors.maxUses !== undefined}
+                aria-describedby={errors.maxUses ? 'coupon-uses-error' : 'coupon-uses-help'}
+                className={fieldClass('maxUses')}
+              />
+              <p id="coupon-uses-help" className="text-xs text-slate-500">
+                A use counts when the order is paid.
+              </p>
+              <FieldError id="coupon-uses-error" text={errors.maxUses} />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="coupon-last-day" className="text-sm font-medium text-slate-300">
+                Last day (optional)
+              </label>
+              <input
+                id="coupon-last-day"
+                type="date"
+                min={today}
+                value={values.lastDay}
+                onChange={(e) => change('lastDay', e.target.value)}
+                aria-invalid={errors.lastDay !== undefined}
+                aria-describedby={errors.lastDay ? 'coupon-last-day-error' : 'coupon-last-day-help'}
+                className={fieldClass('lastDay')}
+              />
+              <p id="coupon-last-day-help" className="text-xs text-slate-500">
+                The code works until the end of that day. Empty: no end.
+              </p>
+              <FieldError id="coupon-last-day-error" text={errors.lastDay} />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input
+              id="coupon-active"
+              type="checkbox"
+              checked={startActive}
+              onChange={(e) => setStartActive(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
+            />
+            Students can use it now
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 py-2.5 px-5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Creating...' : 'Create the coupon'}
             </button>
-            <button className="p-2 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <ChevronRight className="w-4 h-4" />
+            <button
+              type="button"
+              onClick={() => setFormOpen(false)}
+              disabled={saving}
+              className="py-2.5 px-4 rounded-xl text-sm text-slate-300 border border-slate-700 hover:bg-slate-800 transition-colors"
+            >
+              Cancel
             </button>
           </div>
-        </div>
-      </div>
+        </form>
+      )}
 
+      {coupons !== null && coupons.length === 0 && formOpen === false && (
+        <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
+          <Tag aria-hidden="true" className="w-8 h-8 text-indigo-400 mb-3" />
+          <h2 className="text-lg font-semibold text-white mb-1">No coupons yet</h2>
+          <p className="text-sm text-slate-400">
+            Create a code like WELCOME10 to give new students a discount, or a limited one for an event.
+          </p>
+        </div>
+      )}
+
+      {coupons !== null && loadedAt !== null && coupons.length > 0 && (
+        <ul className="space-y-3" aria-label="Your coupons">
+          {coupons.map((coupon) => {
+            const state = couponState(coupon, loadedAt);
+            const busy = busyId === coupon.id;
+            return (
+              <li key={coupon.id} className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-bold text-white font-mono break-all">{coupon.code}</h3>
+                      <button
+                        type="button"
+                        onClick={() => copy(coupon)}
+                        aria-label={`Copy ${coupon.code}`}
+                        className="inline-flex items-center gap-1 py-1 px-2 rounded-lg text-xs text-slate-400 border border-slate-700 hover:text-white hover:bg-slate-800 transition-colors"
+                      >
+                        <Copy aria-hidden="true" className="w-3.5 h-3.5" />
+                        {copiedId === coupon.id ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-300">
+                      {discountLabel(coupon, formatPrice)} - {usesLabel(coupon)} - {endLabel(coupon)}
+                    </p>
+                    {coupon.centerId === null && (
+                      <p className="text-xs text-indigo-300">Platform-wide: works for every academy.</p>
+                    )}
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-lg border ${STATE_STYLE[state]}`}>
+                    {couponStateLabel(state)}
+                  </span>
+                </div>
+
+                {confirmingId === coupon.id ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                    <span>Delete {coupon.code}? This cannot be undone.</span>
+                    <button
+                      type="button"
+                      onClick={() => remove(coupon)}
+                      disabled={busy}
+                      className="py-2 px-3 rounded-xl text-sm font-medium text-red-300 border border-red-400/30 hover:bg-red-400/10 disabled:opacity-50"
+                    >
+                      {busy ? 'Deleting...' : 'Yes, delete it'}
+                    </button>
+                    <button type="button" onClick={() => setConfirmingId(null)} disabled={busy} className={PLAIN_BUTTON}>
+                      Keep it
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggle(coupon)}
+                      disabled={busyId !== null}
+                      className={PLAIN_BUTTON}
+                    >
+                      {coupon.isActive ? (
+                        <Pause aria-hidden="true" className="w-4 h-4" />
+                      ) : (
+                        <Play aria-hidden="true" className="w-4 h-4" />
+                      )}
+                      {busy ? 'Saving...' : coupon.isActive ? 'Pause' : 'Resume'}
+                    </button>
+                    {canDeleteCoupon(coupon) ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmingId(coupon.id);
+                          setNotice(null);
+                        }}
+                        disabled={busyId !== null}
+                        className="inline-flex items-center gap-1.5 py-2 px-3 text-sm text-slate-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 aria-hidden="true" className="w-4 h-4" />
+                        Delete
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-500">Used in an order: it can be paused, not deleted.</span>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

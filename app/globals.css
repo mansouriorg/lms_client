@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
+/* LMS Academy uses one dark theme. The page background and text color are
+   defined once here, so there is no white flash between pages. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -12,15 +15,37 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@theme {
+  /* slate-500 is used for small helper text in about 100 places. Tailwind's
+     default value has a 3.7:1 contrast on the dark background, and WCAG AA
+     asks for 4.5:1. This value reaches 5.5:1 on the page background and
+     4.5:1 on slate-800 cards. */
+  --color-slate-500: #8090a8;
+}
+
+@layer base {
+  /* Keyboard focus is always visible on links and buttons. Inputs keep the
+     focus ring they already draw with focus:ring-* classes. */
+  :where(a, button, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid #7c86ff;
+    outline-offset: 2px;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* People who ask their system for less motion get no animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
 }

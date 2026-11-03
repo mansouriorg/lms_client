@@ -1,174 +1,325 @@
 'use client';
 
-import { useState } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Download, 
-  MoreVertical, 
-  Mail, 
-  User, 
-  GraduationCap,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { AlertCircle, Download, Mail, Phone, RotateCcw, Search, Users } from 'lucide-react';
+import { mailHref, phoneHref } from '@/lib/academies';
+import { apiErrorMessage } from '@/lib/api-error';
+import { formatOrderDate } from '@/lib/orders';
+import { timeAgo } from '@/lib/qa';
+import { todayIn } from '@/lib/sessions';
+import {
+  type AcademyStudent,
+  type ProgressFilter,
+  type ProgressState,
+  activityLabel,
+  courseOptions,
+  filterStudents,
+  lessonsLabel,
+  progressLabel,
+  progressState,
+  studentInitials,
+  studentName,
+  studentTotals,
+  studentsCsv,
+} from '@/lib/students';
+import { useSession } from '@/lib/use-session';
+import { studentsService } from '@/services/students.service';
 
-export default function StudentsManagementPage() {
-  // Mock data for enrolled students
-  const [students] = useState([
-    { id: 'STU-001', name: 'Sarah Connor', email: 'sarah.c@example.com', course: 'Mastering Next.js & NestJS', progress: 85, lastActive: '2 hours ago', status: 'active' },
-    { id: 'STU-002', name: 'John Doe', email: 'john.dev@example.com', course: 'Backend Engineering', progress: 12, lastActive: 'Yesterday', status: 'active' },
-    { id: 'STU-003', name: 'Ali Ben Salah', email: 'ali.b@example.com', course: 'React Native Crash Course', progress: 100, lastActive: 'Oct 15, 2026', status: 'completed' },
-    { id: 'STU-004', name: 'Fatima Zahra', email: 'fatima.z@example.com', course: 'Mastering Next.js & NestJS', progress: 45, lastActive: '3 days ago', status: 'inactive' },
-    { id: 'STU-005', name: 'Mehdi Hassan', email: 'mehdi.h@example.com', course: 'System Architecture', progress: 0, lastActive: 'Never', status: 'new' },
-  ]);
+const STATE_STYLES: Record<ProgressState, string> = {
+  'no-lessons': 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+  'not-started': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  'in-progress': 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20',
+  finished: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+};
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-      case 'completed': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
-      case 'inactive': return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-      case 'new': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-    }
+const FIELD =
+  'bg-slate-900/50 border border-slate-800 text-sm text-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 block p-2.5 outline-none';
+
+// The students of the academy: everyone who paid for one of its courses
+// (GET /stages/students), with each course they bought and how far they are.
+// Search, filter by course and by progress, and download the list as CSV.
+export default function StudentsPage() {
+  const { user } = useSession();
+  // null while loading
+  const [students, setStudents] = useState<AcademyStudent[] | null>(null);
+  // When the list was loaded ("3 days ago" depends on it)
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [query, setQuery] = useState('');
+  const [courseId, setCourseId] = useState('');
+  const [progress, setProgress] = useState<ProgressFilter>('');
+
+  useEffect(() => {
+    let active = true;
+    studentsService.list().then(
+      (list) => {
+        if (active) {
+          setStudents(list);
+          setLoadedAt(new Date());
+          setLoadError('');
+        }
+      },
+      (error: unknown) => {
+        if (active) setLoadError(apiErrorMessage(error, 'Could not load your students. Please try again.'));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const all = students ?? [];
+  const rows = filterStudents(all, query, courseId, progress);
+  const totals = studentTotals(all);
+  const options = courseOptions(all);
+  const filtered = query.trim() !== '' || courseId !== '' || progress !== '';
+  const showAcademy = user?.role === 'SUPER_ADMIN';
+
+  const clearFilters = () => {
+    setQuery('');
+    setCourseId('');
+    setProgress('');
+  };
+
+  // The students shown, as a CSV file for a spreadsheet
+  const download = () => {
+    if (loadedAt === null) return;
+    const url = URL.createObjectURL(new Blob([studentsCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `students-${todayIn(loadedAt)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
     <div className="space-y-6">
-      
-      {/* Page Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Students & Enrollments</h1>
-          <p className="text-sm text-slate-400 mt-1">Monitor learner progress and engagement across your courses.</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Students</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Everyone who paid for one of your courses, and how far they are. A student appears here once you mark
+            their order as paid.
+          </p>
         </div>
-        <button className="inline-flex items-center justify-center py-2.5 px-4 border border-slate-700 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl text-sm font-medium text-slate-300 transition-colors backdrop-blur-sm">
-          <Download className="w-4 h-4 mr-2" />
-          Export CSV
-        </button>
+        {students !== null && students.length > 0 && (
+          <button
+            type="button"
+            onClick={download}
+            disabled={rows.length === 0}
+            className="inline-flex shrink-0 items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium text-slate-200 border border-slate-700 hover:bg-slate-800 transition-colors whitespace-nowrap disabled:opacity-50"
+          >
+            <Download aria-hidden="true" className="w-4 h-4" />
+            Download CSV
+          </button>
+        )}
       </div>
 
-      {/* Filters & Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-500" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 sm:text-sm outline-none backdrop-blur-sm"
-            placeholder="Search by student name or email..."
-          />
-        </div>
-        <div className="flex gap-2">
-          <select className="bg-slate-900/50 border border-slate-800 text-sm text-slate-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none backdrop-blur-sm appearance-none min-w-[160px]">
-            <option value="">All Courses</option>
-            <option value="nextjs">Mastering Next.js</option>
-            <option value="backend">Backend Engineering</option>
-          </select>
-          <button className="inline-flex items-center justify-center py-2.5 px-4 border border-slate-700 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl text-sm font-medium text-slate-300 transition-colors backdrop-blur-sm shrink-0">
-            <Filter className="w-4 h-4 mr-2 text-slate-400" />
-            Filters
+      {loadError && (
+        <div
+          role="alert"
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl"
+        >
+          <span className="flex items-start gap-2">
+            <AlertCircle aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
+            {loadError}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError('');
+              setReloadKey((key) => key + 1);
+            }}
+            className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-red-400/30 text-red-300 font-medium hover:bg-red-400/10 transition-colors"
+          >
+            <RotateCcw aria-hidden="true" className="w-4 h-4" />
+            Try again
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Table Container */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl backdrop-blur-sm overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-900/50">
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Student</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Enrolled Course</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider w-48">Progress</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Last Active</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {students.map((student) => (
-                <tr key={student.id} className="hover:bg-slate-800/30 transition-colors group">
-                  
-                  {/* Student Info */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-medium shrink-0 border border-slate-700 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 group-hover:border-indigo-500/30 transition-colors">
-                        {student.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-white">{student.name}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{student.email}</p>
-                      </div>
-                    </div>
-                  </td>
+      {students === null && loadError === '' && (
+        <p role="status" className="py-8 text-center text-sm text-slate-400">
+          Loading your students...
+        </p>
+      )}
 
-                  {/* Course Info */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2 text-sm text-slate-300">
-                      <GraduationCap className="w-4 h-4 text-slate-500" />
-                      {student.course}
-                    </div>
-                  </td>
-
-                  {/* Progress Bar */}
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${student.progress === 100 ? 'bg-indigo-500' : 'bg-emerald-500'}`}
-                          style={{ width: `${student.progress}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-slate-400 w-8 text-right">
-                        {student.progress}%
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Status / Last Active */}
-                  <td className="py-4 px-6">
-                    <div className="flex flex-col items-start gap-1.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider ${getStatusColor(student.status)}`}>
-                        {student.status}
-                      </span>
-                      <span className="text-xs text-slate-400">{student.lastActive}</span>
-                    </div>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors outline-none focus:ring-2 focus:ring-indigo-500/50" title="Message Student">
-                        <Mail className="w-4 h-4" />
-                      </button>
-                      <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors outline-none focus:ring-2 focus:ring-slate-500/50" title="More Options">
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-900/30">
+      {students !== null && students.length === 0 && (
+        <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
+          <Users aria-hidden="true" className="w-8 h-8 text-indigo-400 mb-3" />
+          <h2 className="text-lg font-semibold text-white mb-1">No students yet</h2>
           <p className="text-sm text-slate-400">
-            Showing <span className="font-medium text-white">1</span> to <span className="font-medium text-white">5</span> of <span className="font-medium text-white">1,248</span> students
+            When a student orders one of your courses and you mark the order as paid, they appear here with their
+            progress.{' '}
+            <Link href="/center/orders" className="text-indigo-400 hover:text-indigo-300 font-medium">
+              Open Orders
+            </Link>
           </p>
-          <div className="flex items-center gap-2">
-            <button className="p-2 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="p-2 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
         </div>
-      </div>
+      )}
 
+      {students !== null && students.length > 0 && (
+        <>
+          <p className="text-sm text-slate-400">
+            {totals.students} {totals.students === 1 ? 'student' : 'students'} - {totals.enrollments}{' '}
+            {totals.enrollments === 1 ? 'course bought' : 'courses bought'} - {totals.finished} finished
+          </p>
+
+          {/* Search and filters */}
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="relative flex-1">
+              <label htmlFor="student-search" className="sr-only">
+                Search students
+              </label>
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Search aria-hidden="true" className="h-4 w-4 text-slate-500" />
+              </div>
+              <input
+                id="student-search"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, email, phone or course"
+                className="block w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none"
+              />
+            </div>
+            <label htmlFor="student-course" className="sr-only">
+              Course
+            </label>
+            <select
+              id="student-course"
+              value={courseId}
+              onChange={(e) => setCourseId(e.target.value)}
+              className={`${FIELD} md:max-w-[240px]`}
+            >
+              <option value="">All courses</option>
+              {options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.title}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="student-progress" className="sr-only">
+              Progress
+            </label>
+            <select
+              id="student-progress"
+              value={progress}
+              onChange={(e) => setProgress(e.target.value as ProgressFilter)}
+              className={FIELD}
+            >
+              <option value="">Any progress</option>
+              <option value="not-started">Not started</option>
+              <option value="in-progress">In progress</option>
+              <option value="finished">Finished</option>
+            </select>
+          </div>
+
+          {rows.length === 0 && (
+            <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 text-sm text-slate-400">
+              No student matches your search.{' '}
+              <button type="button" onClick={clearFilters} className="text-indigo-400 hover:text-indigo-300 font-medium">
+                Clear the filters
+              </button>
+            </div>
+          )}
+
+          {rows.length > 0 && (
+            <>
+              {filtered && (
+                <p className="text-xs text-slate-500" role="status">
+                  Showing {rows.length} of {all.length} {all.length === 1 ? 'student' : 'students'}.
+                </p>
+              )}
+              <ul className="space-y-3" aria-label="Your students">
+                {rows.map(({ student, courses }) => {
+                  const mail = mailHref(student.email);
+                  const call = student.phone === null ? null : phoneHref(student.phone);
+                  return (
+                    <li key={student.id} className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div
+                          aria-hidden="true"
+                          className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-semibold text-slate-300 shrink-0"
+                        >
+                          {studentInitials(student)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-base font-semibold text-white break-words">{studentName(student)}</h2>
+                          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
+                            {mail === null ? (
+                              <span className="break-all">{student.email}</span>
+                            ) : (
+                              <a href={mail} className="inline-flex items-center gap-1.5 hover:text-indigo-300 break-all">
+                                <Mail aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
+                                {student.email}
+                              </a>
+                            )}
+                            {student.phone !== null && call !== null && (
+                              <a href={call} className="inline-flex items-center gap-1.5 hover:text-indigo-300">
+                                <Phone aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
+                                {student.phone}
+                              </a>
+                            )}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Student since {formatOrderDate(student.since).date}
+                            {loadedAt !== null && ` - ${activityLabel(student, loadedAt, timeAgo)}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <ul className="space-y-3" aria-label={`Courses of ${studentName(student)}`}>
+                        {courses.map((course) => {
+                          const state = progressState(course);
+                          return (
+                            <li key={course.id} className="p-3 rounded-xl bg-slate-800/30 border border-slate-800">
+                              <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-slate-200 break-words">{course.title}</p>
+                                  {showAcademy && course.academy && (
+                                    <p className="text-xs text-slate-500">{course.academy}</p>
+                                  )}
+                                </div>
+                                <span
+                                  className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-md border ${STATE_STYLES[state]}`}
+                                >
+                                  {progressLabel(state)}
+                                </span>
+                              </div>
+                              <div
+                                role="progressbar"
+                                aria-label={`Progress of ${studentName(student)} in ${course.title}`}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={course.percentage}
+                                className="h-2 w-full rounded-full bg-slate-800 overflow-hidden"
+                              >
+                                <div
+                                  className={`h-full rounded-full ${state === 'finished' ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                                  style={{ width: `${course.percentage}%` }}
+                                />
+                              </div>
+                              <p className="flex flex-wrap justify-between gap-x-3 text-xs text-slate-400 mt-2">
+                                <span>{lessonsLabel(course)}</span>
+                                <span>Since {formatOrderDate(course.since).date}</span>
+                              </p>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

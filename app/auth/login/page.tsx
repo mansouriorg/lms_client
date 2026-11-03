@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Github } from 'lucide-react';
+import Logo from '@/components/ui/Logo';
+import { apiErrorMessage } from '@/lib/api-error';
+import { afterSignInPath } from '@/lib/auth';
+import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 // Make sure this path points to where you created the auth.service.ts file!
 import { authService } from '@/services/auth.service'; 
 
@@ -23,20 +26,15 @@ export default function PremiumLoginPage() {
     try {
       // 1. Send credentials to NestJS backend
       const data = await authService.login({ email, password });
-      const userRole = data.user.role;
 
-      // 2. The "Smart Traffic Cop" Routing Logic
-      if (userRole === 'ADMIN') {
-        router.push('/admin-dashboard');
-      } else if (userRole === 'CENTER') {
-        router.push('/center-dashboard');
-      } else {
-        router.push('/dashboard'); // Default student dashboard
-      }
+      // 2. Back to the page they tried to open (?next=...), or to the dashboard
+      //    of their area. lib/auth.ts decides which area a role belongs to.
+      const next = new URLSearchParams(window.location.search).get('next');
+      router.push(afterSignInPath(data.user.role, next));
 
-    } catch (err: any) {
-      // Safely extract the error message from the NestJS response
-      setError(err.response?.data?.message || 'Une erreur est survenue lors de la connexion.');
+    } catch (err) {
+      // The server sends a readable message with every error
+      setError(apiErrorMessage(err, 'Could not sign in. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -50,9 +48,7 @@ export default function PremiumLoginPage() {
           
           {/* Header */}
           <div>
-            <div className="h-10 w-10 bg-indigo-500 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/30">
-              <span className="text-white font-bold text-xl">X</span>
-            </div>
+            <Logo className="mb-6" />
             <h2 className="text-3xl font-bold text-white tracking-tight">
               Sign in to your account
             </h2>
@@ -68,31 +64,7 @@ export default function PremiumLoginPage() {
             </div>
           )}
 
-          {/* Social Logins */}
-          <div className="grid grid-cols-2 gap-4">
-            <button className="flex items-center justify-center py-2.5 px-4 rounded-xl bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 hover:border-slate-600 transition-all duration-200 text-slate-300 text-sm font-medium">
-              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-              Google
-            </button>
-            <button className="flex items-center justify-center py-2.5 px-4 rounded-xl bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 hover:border-slate-600 transition-all duration-200 text-slate-300 text-sm font-medium">
-              <Github className="w-5 h-5 mr-2" />
-              GitHub
-            </button>
-          </div>
-
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-slate-700/50"></div>
-            <span className="flex-shrink-0 mx-4 text-slate-500 text-xs uppercase tracking-wider font-medium">
-              Or continue with email
-            </span>
-            <div className="flex-grow border-t border-slate-700/50"></div>
-          </div>
-
+          {/* Email and password only: there is no sign-in with Google or GitHub yet */}
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
@@ -110,7 +82,7 @@ export default function PremiumLoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="block w-full pl-11 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 sm:text-sm"
-                  placeholder="m.mansouri@example.com"
+                  placeholder="you@example.com"
                 />
               </div>
             </div>
@@ -120,7 +92,7 @@ export default function PremiumLoginPage() {
                 <label htmlFor="password" className="text-sm font-medium text-slate-300">
                   Password
                 </label>
-                <Link href="/forgot" className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+                <Link href="/auth/forgot-password" className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
                   Forgot password?
                 </Link>
               </div>
@@ -173,8 +145,8 @@ export default function PremiumLoginPage() {
           </form>
 
           <p className="text-center text-sm text-slate-400">
-            Don't have an account?{' '}
-            <Link href="/register" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+            No account yet?{' '}
+            <Link href="/auth/register" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
               Create an account
             </Link>
           </p>
@@ -195,26 +167,30 @@ export default function PremiumLoginPage() {
             <div className="w-2 h-2 rounded-full bg-green-500/80"></div>
           </div>
           <h3 className="text-3xl font-bold text-white mb-6 leading-tight">
-            Build incredible digital experiences.
+            Pick up where you left off.
           </h3>
           <p className="text-slate-300 text-lg leading-relaxed mb-8">
-            Access your dashboard to manage deployments, monitor real-time traffic, and scale your infrastructure seamlessly.
+            Your courses, lesson progress, assignments and live sessions are waiting in your dashboard.
           </p>
           
-          {/* Mockup User Profile/Testimonial */}
-          <div className="flex items-center gap-4 pt-6 border-t border-white/10">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-              M
-            </div>
-            <div>
-              <p className="text-white font-medium">Mahmoud Mansouri</p>
-              <p className="text-slate-400 text-sm">Software Engineer</p>
-            </div>
-          </div>
+          {/* What students find after signing in */}
+          <ul className="space-y-4 pt-6 border-t border-white/10">
+            {[
+              'Track your progress lesson by lesson',
+              'Ask questions right under each lesson',
+              'Get feedback on your projects from instructors',
+            ].map((item) => (
+              <li key={item} className="flex items-center text-slate-300">
+                <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center mr-3 border border-indigo-500/30">
+                  <svg aria-hidden="true" className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                {item}
+              </li>
+            ))}
+          </ul>
         </div>
-
-        {/* Optional: Code Pattern Overlay */}
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
       </div>
     </div>
   );
